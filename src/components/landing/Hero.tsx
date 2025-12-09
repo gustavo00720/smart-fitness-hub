@@ -37,16 +37,11 @@ const Hero = () => {
           </p>
 
           {/* CTAs */}
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16 animate-slide-up delay-300">
+          <div className="flex items-center justify-center mb-16 animate-slide-up delay-300">
             <Link to="/cadastro">
               <Button variant="hero" size="xl" className="group">
-                Começar Gratuitamente
+                Começar
                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-              </Button>
-            </Link>
-            <Link to="/demo">
-              <Button variant="glass" size="xl">
-                Ver Demonstração
               </Button>
             </Link>
           </div>
