@@ -5,8 +5,20 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Dumbbell, ArrowLeft, Eye, EyeOff, Check, User, GraduationCap } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import { z } from "zod";
 
 type ProfileType = "profissional" | "aluno" | null;
+
+const signupSchema = z.object({
+  fullName: z.string().min(3, "Nome deve ter no mínimo 3 caracteres"),
+  email: z.string().email("Email inválido"),
+  password: z.string().min(8, "Senha deve ter no mínimo 8 caracteres"),
+  confirmPassword: z.string(),
+}).refine((data) => data.password === data.confirmPassword, {
+  message: "As senhas não coincidem",
+  path: ["confirmPassword"],
+});
 
 const Cadastro = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -15,31 +27,99 @@ const Cadastro = () => {
   const [step, setStep] = useState(1);
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { signUp } = useAuth();
+
+  // Form fields
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [phone, setPhone] = useState("");
+  const [crefNumber, setCrefNumber] = useState("");
+  const [crefState, setCrefState] = useState("");
+  const [age, setAge] = useState("");
+  const [inviteCode, setInviteCode] = useState("");
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrors({});
     
     if (step === 1) {
+      // Validate step 1
+      const result = signupSchema.safeParse({ fullName, email, password, confirmPassword });
+      if (!result.success) {
+        const fieldErrors: Record<string, string> = {};
+        result.error.errors.forEach((err) => {
+          fieldErrors[err.path[0] as string] = err.message;
+        });
+        setErrors(fieldErrors);
+        return;
+      }
       setStep(2);
       return;
     }
 
     if (profileType === "profissional" && step === 2) {
+      if (!crefNumber || !crefState) {
+        setErrors({
+          crefNumber: !crefNumber ? "CREF é obrigatório" : "",
+          crefState: !crefState ? "Estado do CREF é obrigatório" : "",
+        });
+        return;
+      }
       setStep(3);
       return;
     }
 
+    // Final step - submit registration
     setIsLoading(true);
-    
-    // Simulate registration
-    setTimeout(() => {
+
+    const additionalData: Record<string, any> = {
+      phone,
+    };
+
+    if (profileType === "profissional") {
+      additionalData.cref_number = crefNumber;
+      additionalData.cref_state = crefState;
+    } else {
+      additionalData.invite_code = inviteCode;
+      additionalData.age = age ? parseInt(age) : null;
+    }
+
+    const { error } = await signUp(
+      email,
+      password,
+      fullName,
+      profileType === "profissional" ? "professional" : "student",
+      additionalData
+    );
+
+    if (error) {
       setIsLoading(false);
+      let errorMessage = "Erro ao criar conta. Tente novamente.";
+      
+      if (error.message.includes("User already registered")) {
+        errorMessage = "Este email já está cadastrado.";
+      } else if (error.message.includes("Password")) {
+        errorMessage = "Senha muito fraca. Use letras, números e símbolos.";
+      }
+
       toast({
-        title: "Conta criada com sucesso!",
-        description: "Bem-vindo ao TreinAI! Verifique seu e-mail.",
+        title: "Erro no cadastro",
+        description: errorMessage,
+        variant: "destructive",
       });
-      navigate(profileType === "profissional" ? "/dashboard/personal" : "/dashboard/aluno");
-    }, 1500);
+      return;
+    }
+
+    setIsLoading(false);
+    toast({
+      title: "Conta criada com sucesso!",
+      description: "Bem-vindo ao TreinAI!",
+    });
+    
+    navigate(profileType === "profissional" ? "/dashboard/personal" : "/dashboard/aluno");
   };
 
   const benefitsProfissional = [
@@ -163,16 +243,26 @@ const Cadastro = () => {
                       <Input 
                         type="text" 
                         placeholder="Seu nome"
+                        value={fullName}
+                        onChange={(e) => setFullName(e.target.value)}
                         required 
                       />
+                      {errors.fullName && (
+                        <p className="text-sm text-destructive mt-1">{errors.fullName}</p>
+                      )}
                     </div>
                     <div>
                       <label className="text-sm font-medium mb-2 block">E-mail</label>
                       <Input 
                         type="email" 
                         placeholder="seu@email.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
                         required 
                       />
+                      {errors.email && (
+                        <p className="text-sm text-destructive mt-1">{errors.email}</p>
+                      )}
                     </div>
                     <div>
                       <label className="text-sm font-medium mb-2 block">Senha</label>
@@ -180,6 +270,8 @@ const Cadastro = () => {
                         <Input 
                           type={showPassword ? "text" : "password"} 
                           placeholder="Mínimo 8 caracteres"
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
                           required 
                           minLength={8}
                         />
@@ -191,22 +283,32 @@ const Cadastro = () => {
                           {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                         </button>
                       </div>
+                      {errors.password && (
+                        <p className="text-sm text-destructive mt-1">{errors.password}</p>
+                      )}
                     </div>
                     <div>
                       <label className="text-sm font-medium mb-2 block">Confirmar senha</label>
                       <Input 
                         type="password" 
                         placeholder="Repita a senha"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
                         required 
                       />
+                      {errors.confirmPassword && (
+                        <p className="text-sm text-destructive mt-1">{errors.confirmPassword}</p>
+                      )}
                     </div>
                     {profileType === "aluno" && (
                       <div>
-                        <label className="text-sm font-medium mb-2 block">Código do Personal</label>
+                        <label className="text-sm font-medium mb-2 block">Código do Personal (opcional)</label>
                         <Input 
                           type="text" 
                           placeholder="Digite o código fornecido"
-                          required 
+                          value={inviteCode}
+                          onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
+                          className="uppercase"
                         />
                         <p className="text-xs text-muted-foreground mt-1">
                           Solicite o código ao seu personal trainer
@@ -217,10 +319,12 @@ const Cadastro = () => {
                 ) : step === 2 && profileType === "profissional" ? (
                   <>
                     <div>
-                      <label className="text-sm font-medium mb-2 block">CPF</label>
+                      <label className="text-sm font-medium mb-2 block">Telefone</label>
                       <Input 
-                        type="text" 
-                        placeholder="000.000.000-00"
+                        type="tel" 
+                        placeholder="(00) 00000-0000"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
                         required 
                       />
                     </div>
@@ -228,28 +332,54 @@ const Cadastro = () => {
                       <label className="text-sm font-medium mb-2 block">Número do CREF</label>
                       <Input 
                         type="text" 
-                        placeholder="000000-G/SP"
+                        placeholder="000000-G"
+                        value={crefNumber}
+                        onChange={(e) => setCrefNumber(e.target.value)}
                         required 
                       />
+                      {errors.crefNumber && (
+                        <p className="text-sm text-destructive mt-1">{errors.crefNumber}</p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium mb-2 block">Estado do CREF</label>
+                      <Input 
+                        type="text" 
+                        placeholder="SP"
+                        value={crefState}
+                        onChange={(e) => setCrefState(e.target.value.toUpperCase())}
+                        maxLength={2}
+                        className="uppercase"
+                        required 
+                      />
+                      {errors.crefState && (
+                        <p className="text-sm text-destructive mt-1">{errors.crefState}</p>
+                      )}
                       <p className="text-xs text-muted-foreground mt-1">
                         Validaremos automaticamente seu registro
                       </p>
                     </div>
+                  </>
+                ) : step === 2 && profileType === "aluno" ? (
+                  <>
                     <div>
-                      <label className="text-sm font-medium mb-2 block">Telefone</label>
+                      <label className="text-sm font-medium mb-2 block">Telefone (opcional)</label>
                       <Input 
                         type="tel" 
                         placeholder="(00) 00000-0000"
-                        required 
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
                       />
                     </div>
                     <div>
-                      <label className="text-sm font-medium mb-2 block">Idade</label>
+                      <label className="text-sm font-medium mb-2 block">Idade (opcional)</label>
                       <Input 
                         type="number" 
                         placeholder="Sua idade"
-                        required 
-                        min={18}
+                        value={age}
+                        onChange={(e) => setAge(e.target.value)}
+                        min={10}
+                        max={100}
                       />
                     </div>
                   </>
