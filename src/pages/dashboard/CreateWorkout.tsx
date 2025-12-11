@@ -243,12 +243,12 @@ const CreateWorkout = () => {
                         className="pl-9"
                       />
                     </div>
-                    <Select value={selectedMuscle} onValueChange={setSelectedMuscle}>
+                    <Select value={selectedMuscle} onValueChange={(val) => setSelectedMuscle(val === "all" ? "" : val)}>
                       <SelectTrigger className="w-full sm:w-48">
                         <SelectValue placeholder="Grupo muscular" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Todos</SelectItem>
+                        <SelectItem value="all">Todos</SelectItem>
                         {muscleGroups.map(muscle => (
                           <SelectItem key={muscle} value={muscle}>
                             {muscle}
