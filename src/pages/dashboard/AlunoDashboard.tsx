@@ -14,12 +14,15 @@ import {
   ChevronRight,
   TrendingUp,
   MessageCircle,
-  CheckCircle
+  CheckCircle,
+  Timer,
+  Target
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useWorkouts } from "@/hooks/useWorkouts";
 import { useWorkoutHistory } from "@/hooks/useWorkoutHistory";
 import { supabase } from "@/integrations/supabase/client";
+import WorkoutSession from "@/components/workout/WorkoutSession";
 
 const AlunoDashboard = () => {
   const navigate = useNavigate();
@@ -28,9 +31,8 @@ const AlunoDashboard = () => {
   const { completeWorkout } = useWorkoutHistory();
   const [profileName, setProfileName] = useState("Aluno");
   const [streakDays, setStreakDays] = useState(0);
-  const [completedExercises, setCompletedExercises] = useState<string[]>([]);
+  const [showWorkoutSession, setShowWorkoutSession] = useState(false);
   const [currentWorkout, setCurrentWorkout] = useState<typeof workouts[0] | null>(null);
-  const [isCompleting, setIsCompleting] = useState(false);
 
   // Get today's day of week (0 = Sunday, 1 = Monday, etc.)
   const today = new Date().getDay();
@@ -75,30 +77,19 @@ const AlunoDashboard = () => {
     navigate('/');
   };
 
-  const toggleExercise = (exerciseId: string) => {
-    setCompletedExercises(prev => 
-      prev.includes(exerciseId) 
-        ? prev.filter(e => e !== exerciseId) 
-        : [...prev, exerciseId]
-    );
+  const handleStartWorkout = () => {
+    if (currentWorkout) {
+      setShowWorkoutSession(true);
+    }
   };
 
   const handleCompleteWorkout = async () => {
     if (!currentWorkout) return;
     
-    setIsCompleting(true);
-    const { error } = await completeWorkout(currentWorkout.id);
-    setIsCompleting(false);
-    
-    if (!error) {
-      setCompletedExercises([]);
-      setStreakDays(prev => prev + 1);
-    }
+    await completeWorkout(currentWorkout.id);
+    setShowWorkoutSession(false);
+    setStreakDays(prev => prev + 1);
   };
-
-  const progressPercent = currentWorkout?.exercises 
-    ? (completedExercises.length / currentWorkout.exercises.length) * 100 
-    : 0;
 
   const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
   const weekProgress = weekDays.map((day, index) => ({
@@ -113,6 +104,21 @@ const AlunoDashboard = () => {
     if (hour < 18) return "Boa tarde";
     return "Boa noite";
   };
+
+  const totalExercises = currentWorkout?.exercises?.length || 0;
+  const totalSets = currentWorkout?.exercises?.reduce((acc, ex) => acc + ex.sets, 0) || 0;
+
+  // Workout Session Overlay
+  if (showWorkoutSession && currentWorkout && currentWorkout.exercises) {
+    return (
+      <WorkoutSession
+        workoutName={currentWorkout.name}
+        exercises={currentWorkout.exercises}
+        onComplete={handleCompleteWorkout}
+        onClose={() => setShowWorkoutSession(false)}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -192,7 +198,7 @@ const AlunoDashboard = () => {
         {/* Greeting & Streak */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-2xl md:text-3xl font-display font-bold">{getGreeting()}, {profileName}! 💪</h1>
+            <h1 className="text-2xl md:text-3xl font-display font-bold">{getGreeting()}, {profileName}!</h1>
             <p className="text-muted-foreground">Vamos treinar hoje?</p>
           </div>
           <Card variant="gradient" className="border-primary/30">
@@ -202,7 +208,7 @@ const AlunoDashboard = () => {
               </div>
               <div>
                 <p className="text-2xl font-display font-bold">{streakDays} dias</p>
-                <p className="text-sm text-muted-foreground">de streak 🔥</p>
+                <p className="text-sm text-muted-foreground">de streak</p>
               </div>
             </CardContent>
           </Card>
@@ -218,7 +224,7 @@ const AlunoDashboard = () => {
               </span>
             </div>
             <div className="flex justify-between">
-              {weekProgress.map((day, index) => (
+              {weekProgress.map((day) => (
                 <div key={day.day} className="flex flex-col items-center gap-2">
                   <div 
                     className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
@@ -248,80 +254,83 @@ const AlunoDashboard = () => {
             </CardContent>
           </Card>
         ) : currentWorkout ? (
-          <Card variant="glass">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle>{currentWorkout.name}</CardTitle>
-                <p className="text-sm text-muted-foreground mt-1">
-                  {completedExercises.length}/{currentWorkout.exercises?.length || 0} exercícios
-                </p>
-              </div>
-              {progressPercent === 100 ? (
-                <Button 
-                  variant="hero" 
-                  onClick={handleCompleteWorkout}
-                  disabled={isCompleting}
-                >
-                  <CheckCircle className="w-4 h-4 mr-2" />
-                  {isCompleting ? "Salvando..." : "Concluir Treino"}
-                </Button>
-              ) : (
-                <Button variant="hero">
-                  <Play className="w-4 h-4 mr-2" />
-                  Iniciar
-                </Button>
-              )}
-            </CardHeader>
-            <CardContent>
-              {/* Progress Bar */}
-              <div className="mb-6">
-                <div className="h-2 bg-muted rounded-full overflow-hidden">
-                  <div 
-                    className="h-full bg-gradient-primary rounded-full transition-all duration-500"
-                    style={{ width: `${progressPercent}%` }}
-                  />
+          <>
+            {/* Workout Header Card */}
+            <Card variant="gradient" className="mb-4 border-primary/30 overflow-hidden relative">
+              <div className="absolute inset-0 bg-gradient-to-r from-primary/20 to-transparent" />
+              <CardContent className="p-6 relative">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm text-primary font-medium mb-1">Treino de Hoje</p>
+                    <h2 className="text-2xl font-display font-bold mb-2">{currentWorkout.name}</h2>
+                    <p className="text-muted-foreground">{currentWorkout.description || 'Vamos lá!'}</p>
+                  </div>
+                  <Button 
+                    variant="hero" 
+                    size="lg"
+                    onClick={handleStartWorkout}
+                    className="glow-primary"
+                  >
+                    <Play className="w-5 h-5 mr-2" />
+                    Iniciar Treino
+                  </Button>
                 </div>
-              </div>
+              </CardContent>
+            </Card>
 
-              {/* Exercises */}
-              <div className="space-y-3">
-                {currentWorkout.exercises?.map((exercicio) => (
+            {/* Workout Stats */}
+            <div className="grid grid-cols-3 gap-3 mb-6">
+              <Card variant="glass">
+                <CardContent className="p-4 text-center">
+                  <Target className="w-5 h-5 mx-auto text-primary mb-2" />
+                  <p className="text-2xl font-display font-bold">{totalExercises}</p>
+                  <p className="text-xs text-muted-foreground">Exercícios</p>
+                </CardContent>
+              </Card>
+              <Card variant="glass">
+                <CardContent className="p-4 text-center">
+                  <Dumbbell className="w-5 h-5 mx-auto text-primary mb-2" />
+                  <p className="text-2xl font-display font-bold">{totalSets}</p>
+                  <p className="text-xs text-muted-foreground">Séries</p>
+                </CardContent>
+              </Card>
+              <Card variant="glass">
+                <CardContent className="p-4 text-center">
+                  <Timer className="w-5 h-5 mx-auto text-primary mb-2" />
+                  <p className="text-2xl font-display font-bold">~45</p>
+                  <p className="text-xs text-muted-foreground">Minutos</p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Exercises Preview */}
+            <Card variant="glass">
+              <CardHeader>
+                <CardTitle className="text-lg">Exercícios</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {currentWorkout.exercises?.map((exercicio, index) => (
                   <div 
                     key={exercicio.id}
-                    onClick={() => toggleExercise(exercicio.id)}
-                    className={`flex items-center justify-between p-4 rounded-lg cursor-pointer transition-all ${
-                      completedExercises.includes(exercicio.id)
-                        ? 'bg-primary/10 border border-primary/30'
-                        : 'bg-secondary/30 hover:bg-secondary/50'
-                    }`}
+                    className="flex items-center gap-4 p-4 rounded-xl bg-secondary/30"
                   >
-                    <div className="flex items-center gap-4">
-                      <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
-                        completedExercises.includes(exercicio.id)
-                          ? 'border-primary bg-primary'
-                          : 'border-muted-foreground'
-                      }`}>
-                        {completedExercises.includes(exercicio.id) && (
-                          <svg className="w-3 h-3 text-primary-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                          </svg>
-                        )}
-                      </div>
-                      <div>
-                        <p className={`font-medium ${completedExercises.includes(exercicio.id) ? 'line-through text-muted-foreground' : ''}`}>
-                          {exercicio.exercise?.name || 'Exercício'}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          {exercicio.sets}x{exercicio.reps} • {exercicio.rest_seconds}s descanso
-                        </p>
-                      </div>
+                    <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center text-muted-foreground font-display font-bold">
+                      {index + 1}
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-medium">
+                        {exercicio.exercise?.name || 'Exercício'}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {exercicio.sets}x{exercicio.reps} • {exercicio.rest_seconds}s descanso
+                      </p>
                     </div>
                     <ChevronRight className="w-5 h-5 text-muted-foreground" />
                   </div>
                 ))}
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </>
         ) : (
           <Card variant="glass">
             <CardContent className="p-8 text-center">
@@ -334,15 +343,47 @@ const AlunoDashboard = () => {
           </Card>
         )}
 
-        {/* AI Coach Button - Mobile */}
-        <div className="fixed bottom-6 right-6 lg:hidden">
-          <Link to="/dashboard/aluno/coach">
-            <Button variant="hero" size="lg" className="rounded-full w-14 h-14 p-0 glow-primary">
-              <Brain className="w-6 h-6" />
-            </Button>
-          </Link>
-        </div>
+        {/* All Workouts */}
+        {workouts.length > 1 && (
+          <div className="mt-6">
+            <h3 className="font-display font-semibold mb-4">Outros Treinos</h3>
+            <div className="space-y-3">
+              {workouts.filter(w => w.id !== currentWorkout?.id).map((workout) => (
+                <Card key={workout.id} variant="glass" className="cursor-pointer hover:border-primary/30 transition-colors">
+                  <CardContent className="p-4 flex items-center justify-between">
+                    <div>
+                      <p className="font-medium">{workout.name}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {workout.exercises?.length || 0} exercícios • {workout.day_of_week !== null && ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'][workout.day_of_week]}
+                      </p>
+                    </div>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => {
+                        setCurrentWorkout(workout);
+                        setShowWorkoutSession(true);
+                      }}
+                    >
+                      <Play className="w-4 h-4 mr-1" />
+                      Iniciar
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
       </main>
+
+      {/* AI Coach Button - Mobile */}
+      <div className="fixed bottom-6 right-6 lg:hidden">
+        <Link to="/dashboard/aluno/coach">
+          <Button variant="hero" size="lg" className="rounded-full w-14 h-14 p-0 glow-primary">
+            <Brain className="w-6 h-6" />
+          </Button>
+        </Link>
+      </div>
     </div>
   );
 };
