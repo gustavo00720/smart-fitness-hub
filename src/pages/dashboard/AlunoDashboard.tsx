@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { 
@@ -10,47 +10,109 @@ import {
   LogOut,
   Flame,
   Trophy,
-  Clock,
   Play,
   ChevronRight,
   TrendingUp,
-  MessageCircle
+  MessageCircle,
+  CheckCircle
 } from "lucide-react";
-
-// Mock data
-const mockTreino = {
-  nome: "Treino A - Peito e Tríceps",
-  exercicios: [
-    { id: 1, nome: "Supino Reto", series: 4, reps: "10-12", peso: "60kg", concluido: true },
-    { id: 2, nome: "Supino Inclinado", series: 3, reps: "10-12", peso: "50kg", concluido: true },
-    { id: 3, nome: "Crucifixo", series: 3, reps: "12-15", peso: "14kg", concluido: false },
-    { id: 4, nome: "Tríceps Pulley", series: 4, reps: "12-15", peso: "25kg", concluido: false },
-    { id: 5, nome: "Tríceps Francês", series: 3, reps: "10-12", peso: "12kg", concluido: false },
-  ]
-};
-
-const weekProgress = [
-  { day: "Seg", completed: true },
-  { day: "Ter", completed: true },
-  { day: "Qua", completed: false, isToday: true },
-  { day: "Qui", completed: false },
-  { day: "Sex", completed: false },
-  { day: "Sáb", completed: false },
-  { day: "Dom", completed: false },
-];
+import { useAuth } from "@/hooks/useAuth";
+import { useWorkouts } from "@/hooks/useWorkouts";
+import { useWorkoutHistory } from "@/hooks/useWorkoutHistory";
+import { supabase } from "@/integrations/supabase/client";
 
 const AlunoDashboard = () => {
-  const [completedExercises, setCompletedExercises] = useState(
-    mockTreino.exercicios.filter(e => e.concluido).map(e => e.id)
-  );
+  const navigate = useNavigate();
+  const { user, signOut } = useAuth();
+  const { workouts, loading: loadingWorkouts } = useWorkouts();
+  const { completeWorkout } = useWorkoutHistory();
+  const [profileName, setProfileName] = useState("Aluno");
+  const [streakDays, setStreakDays] = useState(0);
+  const [completedExercises, setCompletedExercises] = useState<string[]>([]);
+  const [currentWorkout, setCurrentWorkout] = useState<typeof workouts[0] | null>(null);
+  const [isCompleting, setIsCompleting] = useState(false);
 
-  const toggleExercise = (id: number) => {
+  // Get today's day of week (0 = Sunday, 1 = Monday, etc.)
+  const today = new Date().getDay();
+  
+  useEffect(() => {
+    const fetchUserData = async () => {
+      if (!user) return;
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (profile) {
+        setProfileName(profile.full_name.split(' ')[0]);
+      }
+
+      const { data: student } = await supabase
+        .from('students')
+        .select('streak_days')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (student) {
+        setStreakDays(student.streak_days);
+      }
+    };
+
+    fetchUserData();
+  }, [user]);
+
+  useEffect(() => {
+    // Find today's workout or the first active workout
+    const todayWorkout = workouts.find(w => w.day_of_week === today && w.is_active);
+    const activeWorkout = workouts.find(w => w.is_active);
+    setCurrentWorkout(todayWorkout || activeWorkout || null);
+  }, [workouts, today]);
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/');
+  };
+
+  const toggleExercise = (exerciseId: string) => {
     setCompletedExercises(prev => 
-      prev.includes(id) ? prev.filter(e => e !== id) : [...prev, id]
+      prev.includes(exerciseId) 
+        ? prev.filter(e => e !== exerciseId) 
+        : [...prev, exerciseId]
     );
   };
 
-  const progressPercent = (completedExercises.length / mockTreino.exercicios.length) * 100;
+  const handleCompleteWorkout = async () => {
+    if (!currentWorkout) return;
+    
+    setIsCompleting(true);
+    const { error } = await completeWorkout(currentWorkout.id);
+    setIsCompleting(false);
+    
+    if (!error) {
+      setCompletedExercises([]);
+      setStreakDays(prev => prev + 1);
+    }
+  };
+
+  const progressPercent = currentWorkout?.exercises 
+    ? (completedExercises.length / currentWorkout.exercises.length) * 100 
+    : 0;
+
+  const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+  const weekProgress = weekDays.map((day, index) => ({
+    day,
+    completed: index < today && workouts.some(w => w.day_of_week === index),
+    isToday: index === today
+  }));
+
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return "Bom dia";
+    if (hour < 18) return "Boa tarde";
+    return "Boa noite";
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -115,7 +177,10 @@ const AlunoDashboard = () => {
             <Settings className="w-5 h-5" />
             <span>Configurações</span>
           </Link>
-          <button className="flex items-center gap-3 px-3 py-2 rounded-lg text-destructive hover:bg-destructive/10 transition-colors w-full">
+          <button 
+            onClick={handleSignOut}
+            className="flex items-center gap-3 px-3 py-2 rounded-lg text-destructive hover:bg-destructive/10 transition-colors w-full"
+          >
             <LogOut className="w-5 h-5" />
             <span>Sair</span>
           </button>
@@ -127,7 +192,7 @@ const AlunoDashboard = () => {
         {/* Greeting & Streak */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-2xl md:text-3xl font-display font-bold">Bom dia, João! 💪</h1>
+            <h1 className="text-2xl md:text-3xl font-display font-bold">{getGreeting()}, {profileName}! 💪</h1>
             <p className="text-muted-foreground">Vamos treinar hoje?</p>
           </div>
           <Card variant="gradient" className="border-primary/30">
@@ -136,7 +201,7 @@ const AlunoDashboard = () => {
                 <Flame className="w-6 h-6 text-primary-foreground" />
               </div>
               <div>
-                <p className="text-2xl font-display font-bold">15 dias</p>
+                <p className="text-2xl font-display font-bold">{streakDays} dias</p>
                 <p className="text-sm text-muted-foreground">de streak 🔥</p>
               </div>
             </CardContent>
@@ -148,10 +213,12 @@ const AlunoDashboard = () => {
           <CardContent className="p-4">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-display font-semibold">Esta Semana</h3>
-              <span className="text-sm text-muted-foreground">2/7 treinos</span>
+              <span className="text-sm text-muted-foreground">
+                {weekProgress.filter(d => d.completed).length}/7 treinos
+              </span>
             </div>
             <div className="flex justify-between">
-              {weekProgress.map((day) => (
+              {weekProgress.map((day, index) => (
                 <div key={day.day} className="flex flex-col items-center gap-2">
                   <div 
                     className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
@@ -174,69 +241,98 @@ const AlunoDashboard = () => {
         </Card>
 
         {/* Today's Workout */}
-        <Card variant="glass">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle>{mockTreino.nome}</CardTitle>
-              <p className="text-sm text-muted-foreground mt-1">
-                {completedExercises.length}/{mockTreino.exercicios.length} exercícios
-              </p>
-            </div>
-            <Button variant="hero">
-              <Play className="w-4 h-4 mr-2" />
-              Iniciar
-            </Button>
-          </CardHeader>
-          <CardContent>
-            {/* Progress Bar */}
-            <div className="mb-6">
-              <div className="h-2 bg-muted rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-gradient-primary rounded-full transition-all duration-500"
-                  style={{ width: `${progressPercent}%` }}
-                />
+        {loadingWorkouts ? (
+          <Card variant="glass">
+            <CardContent className="p-8 flex items-center justify-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </CardContent>
+          </Card>
+        ) : currentWorkout ? (
+          <Card variant="glass">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle>{currentWorkout.name}</CardTitle>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {completedExercises.length}/{currentWorkout.exercises?.length || 0} exercícios
+                </p>
               </div>
-            </div>
-
-            {/* Exercises */}
-            <div className="space-y-3">
-              {mockTreino.exercicios.map((exercicio) => (
-                <div 
-                  key={exercicio.id}
-                  onClick={() => toggleExercise(exercicio.id)}
-                  className={`flex items-center justify-between p-4 rounded-lg cursor-pointer transition-all ${
-                    completedExercises.includes(exercicio.id)
-                      ? 'bg-primary/10 border border-primary/30'
-                      : 'bg-secondary/30 hover:bg-secondary/50'
-                  }`}
+              {progressPercent === 100 ? (
+                <Button 
+                  variant="hero" 
+                  onClick={handleCompleteWorkout}
+                  disabled={isCompleting}
                 >
-                  <div className="flex items-center gap-4">
-                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
-                      completedExercises.includes(exercicio.id)
-                        ? 'border-primary bg-primary'
-                        : 'border-muted-foreground'
-                    }`}>
-                      {completedExercises.includes(exercicio.id) && (
-                        <svg className="w-3 h-3 text-primary-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                        </svg>
-                      )}
-                    </div>
-                    <div>
-                      <p className={`font-medium ${completedExercises.includes(exercicio.id) ? 'line-through text-muted-foreground' : ''}`}>
-                        {exercicio.nome}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {exercicio.series}x{exercicio.reps} • {exercicio.peso}
-                      </p>
-                    </div>
-                  </div>
-                  <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                  <CheckCircle className="w-4 h-4 mr-2" />
+                  {isCompleting ? "Salvando..." : "Concluir Treino"}
+                </Button>
+              ) : (
+                <Button variant="hero">
+                  <Play className="w-4 h-4 mr-2" />
+                  Iniciar
+                </Button>
+              )}
+            </CardHeader>
+            <CardContent>
+              {/* Progress Bar */}
+              <div className="mb-6">
+                <div className="h-2 bg-muted rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-gradient-primary rounded-full transition-all duration-500"
+                    style={{ width: `${progressPercent}%` }}
+                  />
                 </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+              </div>
+
+              {/* Exercises */}
+              <div className="space-y-3">
+                {currentWorkout.exercises?.map((exercicio) => (
+                  <div 
+                    key={exercicio.id}
+                    onClick={() => toggleExercise(exercicio.id)}
+                    className={`flex items-center justify-between p-4 rounded-lg cursor-pointer transition-all ${
+                      completedExercises.includes(exercicio.id)
+                        ? 'bg-primary/10 border border-primary/30'
+                        : 'bg-secondary/30 hover:bg-secondary/50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
+                        completedExercises.includes(exercicio.id)
+                          ? 'border-primary bg-primary'
+                          : 'border-muted-foreground'
+                      }`}>
+                        {completedExercises.includes(exercicio.id) && (
+                          <svg className="w-3 h-3 text-primary-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                      </div>
+                      <div>
+                        <p className={`font-medium ${completedExercises.includes(exercicio.id) ? 'line-through text-muted-foreground' : ''}`}>
+                          {exercicio.exercise?.name || 'Exercício'}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {exercicio.sets}x{exercicio.reps} • {exercicio.rest_seconds}s descanso
+                        </p>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card variant="glass">
+            <CardContent className="p-8 text-center">
+              <Dumbbell className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
+              <h3 className="font-display font-semibold mb-2">Nenhum treino disponível</h3>
+              <p className="text-muted-foreground">
+                Seu personal ainda não criou um treino para você.
+              </p>
+            </CardContent>
+          </Card>
+        )}
 
         {/* AI Coach Button - Mobile */}
         <div className="fixed bottom-6 right-6 lg:hidden">

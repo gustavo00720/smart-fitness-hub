@@ -11,6 +11,8 @@ import Cadastro from "./pages/Cadastro";
 import PersonalDashboard from "./pages/dashboard/PersonalDashboard";
 import AlunoDashboard from "./pages/dashboard/AlunoDashboard";
 import AdminDashboard from "./pages/dashboard/AdminDashboard";
+import WorkoutsList from "./pages/dashboard/WorkoutsList";
+import CreateWorkout from "./pages/dashboard/CreateWorkout";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -31,6 +33,22 @@ const App = () => (
               element={
                 <ProtectedRoute allowedRoles={['professional', 'admin']}>
                   <PersonalDashboard />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/dashboard/personal/treinos" 
+              element={
+                <ProtectedRoute allowedRoles={['professional', 'admin']}>
+                  <WorkoutsList />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/dashboard/personal/treinos/novo" 
+              element={
+                <ProtectedRoute allowedRoles={['professional', 'admin']}>
+                  <CreateWorkout />
                 </ProtectedRoute>
               } 
             />
