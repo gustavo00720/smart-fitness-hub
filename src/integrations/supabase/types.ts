@@ -138,12 +138,15 @@ export type Database = {
           goal: string | null
           height: number | null
           id: string
+          last_check_in: string | null
           last_workout_at: string | null
+          level: number
           professional_id: string | null
           streak_days: number
           updated_at: string
           user_id: string
           weight: number | null
+          xp: number
         }
         Insert: {
           age?: number | null
@@ -151,12 +154,15 @@ export type Database = {
           goal?: string | null
           height?: number | null
           id?: string
+          last_check_in?: string | null
           last_workout_at?: string | null
+          level?: number
           professional_id?: string | null
           streak_days?: number
           updated_at?: string
           user_id: string
           weight?: number | null
+          xp?: number
         }
         Update: {
           age?: number | null
@@ -164,12 +170,15 @@ export type Database = {
           goal?: string | null
           height?: number | null
           id?: string
+          last_check_in?: string | null
           last_workout_at?: string | null
+          level?: number
           professional_id?: string | null
           streak_days?: number
           updated_at?: string
           user_id?: string
           weight?: number | null
+          xp?: number
         }
         Relationships: [
           {
@@ -360,6 +369,31 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      increment_streak: {
+        Args: { check_date: string; sid: string }
+        Returns: {
+          age: number | null
+          created_at: string
+          goal: string | null
+          height: number | null
+          id: string
+          last_check_in: string | null
+          last_workout_at: string | null
+          level: number
+          professional_id: string | null
+          streak_days: number
+          updated_at: string
+          user_id: string
+          weight: number | null
+          xp: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "students"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
     }
     Enums: {
