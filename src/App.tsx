@@ -15,7 +15,9 @@ import WorkoutsList from "./pages/dashboard/WorkoutsList";
 import CreateWorkout from "./pages/dashboard/CreateWorkout";
 import NotFound from "./pages/NotFound";
 import DashboardStudent from "./pages/DashboardStudent";
+import DashboardTrainer from "./pages/DashboardTrainer";
 import ChatAI from "./pages/ChatAI";
+
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -82,6 +84,14 @@ const App = () => (
               element={
                 <ProtectedRoute allowedRoles={['student', 'professional', 'admin']}>
                   <ChatAI />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/dashboard/trainer" 
+              element={
+                <ProtectedRoute allowedRoles={['professional', 'admin']}>
+                  <DashboardTrainer />
                 </ProtectedRoute>
               } 
             />
