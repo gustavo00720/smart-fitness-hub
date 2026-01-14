@@ -14,7 +14,8 @@ import AdminDashboard from "./pages/dashboard/AdminDashboard";
 import WorkoutsList from "./pages/dashboard/WorkoutsList";
 import CreateWorkout from "./pages/dashboard/CreateWorkout";
 import NotFound from "./pages/NotFound";
-
+import DashboardStudent from "./pages/DashboardStudent";
+import ChatAI from "./pages/ChatAI";
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -65,6 +66,22 @@ const App = () => (
               element={
                 <ProtectedRoute allowedRoles={['admin']}>
                   <AdminDashboard />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/meu-painel" 
+              element={
+                <ProtectedRoute allowedRoles={['student', 'admin']}>
+                  <DashboardStudent />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/coach-ai" 
+              element={
+                <ProtectedRoute allowedRoles={['student', 'professional', 'admin']}>
+                  <ChatAI />
                 </ProtectedRoute>
               } 
             />
