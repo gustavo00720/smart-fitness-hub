@@ -67,10 +67,18 @@ const Login = () => {
       description: "Bem-vindo de volta!",
     });
 
-    // Navigation will happen automatically based on userRole in useEffect
-    // But we can also navigate based on fetched role
-    setTimeout(() => {
-      navigate("/dashboard/personal");
+    // Navigate based on user role
+    setTimeout(async () => {
+      // Fetch the role to determine proper redirect
+      if (userRole === 'professional') {
+        navigate("/dashboard/trainer");
+      } else if (userRole === 'student') {
+        navigate("/meu-painel");
+      } else if (userRole === 'admin') {
+        navigate("/dashboard/admin");
+      } else {
+        navigate("/dashboard/personal");
+      }
     }, 500);
   };
 
