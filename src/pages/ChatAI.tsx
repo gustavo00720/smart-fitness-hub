@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
@@ -6,21 +6,66 @@ import { Loader2, Send, Bot, User } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
+import { useToast } from '@/hooks/use-toast';
 
 interface Message {
   role: 'user' | 'assistant';
   content: string;
 }
 
+const WELCOME_MESSAGE: Message = {
+  role: 'assistant',
+  content: 'Olá! Sou seu Coach de Treino IA. Posso ajudar com dicas de exercícios, nutrição e motivação. Como posso te ajudar hoje?'
+};
+
 export default function ChatAI() {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      role: 'assistant',
-      content: 'Olá! Sou seu Coach de Treino IA. Posso ajudar com dicas de exercícios, nutrição e motivação. Como posso te ajudar hoje?'
-    }
-  ]);
+  const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [studentId, setStudentId] = useState<string | null>(null);
+  const { toast } = useToast();
+
+  // Load student ID and message history
+  useEffect(() => {
+    const loadData = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Get student ID
+      const { data: student } = await supabase
+        .from('students')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (student) {
+        setStudentId(student.id);
+
+        // Load message history
+        const { data: savedMessages } = await supabase
+          .from('messages')
+          .select('role, content')
+          .eq('student_id', student.id)
+          .order('created_at', { ascending: true });
+
+        if (savedMessages && savedMessages.length > 0) {
+          setMessages(savedMessages as Message[]);
+        }
+      }
+    };
+
+    loadData();
+  }, []);
+
+  const saveMessage = async (role: 'user' | 'assistant', content: string) => {
+    if (!studentId) return;
+    
+    await supabase.from('messages').insert({
+      student_id: studentId,
+      role,
+      content
+    });
+  };
 
   const sendMessage = async () => {
     if (!input.trim() || loading) return;
@@ -29,6 +74,9 @@ export default function ChatAI() {
     setMessages(prev => [...prev, userMessage]);
     setInput('');
     setLoading(true);
+
+    // Save user message to database
+    await saveMessage('user', input);
 
     try {
       const { data, error } = await supabase.functions.invoke('ai-coach', {
@@ -42,17 +90,27 @@ export default function ChatAI() {
 
       if (error) throw error;
 
+      const responseContent = data.response || 'Desculpe, não consegui processar sua mensagem.';
       const assistantMessage: Message = {
         role: 'assistant',
-        content: data.response || 'Desculpe, não consegui processar sua mensagem.'
+        content: responseContent
       };
       setMessages(prev => [...prev, assistantMessage]);
+
+      // Save assistant message to database
+      await saveMessage('assistant', responseContent);
     } catch (error) {
       console.error('Error calling AI:', error);
+      const errorMessage = 'Desculpe, ocorreu um erro. Tente novamente mais tarde.';
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: 'Desculpe, ocorreu um erro. Tente novamente mais tarde.'
+        content: errorMessage
       }]);
+      toast({
+        title: 'Erro',
+        description: 'Não foi possível obter resposta do coach.',
+        variant: 'destructive'
+      });
     } finally {
       setLoading(false);
     }
